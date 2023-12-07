@@ -90,7 +90,7 @@ class HelloArRenderer(val activity: HelloArActivity) :
     val APPROXIMATE_DISTANCE_METERS = 2.0f
 
     val CUBEMAP_RESOLUTION = 16
-    val CUBEMAP_NUMBER_OF_IMPORTANCE_SAMPLES = 32
+    val CUBEMAP_NUMBER_OF_IMPORTANCE_SAMPLES = 1
   }
 
   lateinit var render: SampleRender
@@ -174,25 +174,25 @@ class HelloArRenderer(val activity: HelloArActivity) :
       val dfgChannels = 2
       val halfFloatSize = 2
 
-      val buffer: ByteBuffer =
-        ByteBuffer.allocateDirect(dfgResolution * dfgResolution * dfgChannels * halfFloatSize)
-      activity.assets.open("models/dfg.raw").use { it.read(buffer.array()) }
-
-      // SampleRender abstraction leaks here.
-      GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, dfgTexture.textureId)
-      GLError.maybeThrowGLException("Failed to bind DFG texture", "glBindTexture")
-      GLES30.glTexImage2D(
-        GLES30.GL_TEXTURE_2D,
-        /*level=*/ 0,
-        GLES30.GL_RG16F,
-        /*width=*/ dfgResolution,
-        /*height=*/ dfgResolution,
-        /*border=*/ 0,
-        GLES30.GL_RG,
-        GLES30.GL_HALF_FLOAT,
-        buffer
-      )
-      GLError.maybeThrowGLException("Failed to populate DFG texture", "glTexImage2D")
+//      val buffer: ByteBuffer =
+//        ByteBuffer.allocateDirect(dfgResolution * dfgResolution * dfgChannels * halfFloatSize)
+//      activity.assets.open("models/dfg.raw").use { it.read(buffer.array()) }
+//
+//      // SampleRender abstraction leaks here.
+//      GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, dfgTexture.textureId)
+//      GLError.maybeThrowGLException("Failed to bind DFG texture", "glBindTexture")
+//      GLES30.glTexImage2D(
+//        GLES30.GL_TEXTURE_2D,
+//        /*level=*/ 0,
+//        GLES30.GL_RG16F,
+//        /*width=*/ dfgResolution,
+//        /*height=*/ dfgResolution,
+//        /*border=*/ 0,
+//        GLES30.GL_RG,
+//        GLES30.GL_HALF_FLOAT,
+//        buffer
+//      )
+//      GLError.maybeThrowGLException("Failed to populate DFG texture", "glTexImage2D")
 
 //      // Point cloud
 //      pointCloudShader =
@@ -216,27 +216,27 @@ class HelloArRenderer(val activity: HelloArActivity) :
       virtualObjectAlbedoTexture =
         Texture.createFromAsset(
           render,
-          "models/pawn_albedo.png",
+          "models/blank.png",
           Texture.WrapMode.CLAMP_TO_EDGE,
           Texture.ColorFormat.SRGB
         )
 
-      virtualObjectAlbedoInstantPlacementTexture =
-        Texture.createFromAsset(
-          render,
-          "models/pawn_albedo_instant_placement.png",
-          Texture.WrapMode.CLAMP_TO_EDGE,
-          Texture.ColorFormat.SRGB
-        )
+//      virtualObjectAlbedoInstantPlacementTexture =
+//        Texture.createFromAsset(
+//          render,
+//          "models/pawn_albedo_instant_placement.png",
+//          Texture.WrapMode.CLAMP_TO_EDGE,
+//          Texture.ColorFormat.SRGB
+//        )
 
-      val virtualObjectPbrTexture =
-        Texture.createFromAsset(
-          render,
-          "models/pawn_roughness_metallic_ao.png",
-          Texture.WrapMode.CLAMP_TO_EDGE,
-          Texture.ColorFormat.LINEAR
-        )
-      virtualObjectMesh = Mesh.createFromAsset(render, "models/pawn.obj")
+//      val virtualObjectPbrTexture =
+//        Texture.createFromAsset(
+//          render,
+//          "models/pawn_roughness_metallic_ao.png",
+//          Texture.WrapMode.CLAMP_TO_EDGE,
+//          Texture.ColorFormat.LINEAR
+//        )
+      virtualObjectMesh = Mesh.createFromAsset(render, "models/iss.obj")
       virtualObjectShader =
         Shader.createFromAssets(
             render,
@@ -245,7 +245,7 @@ class HelloArRenderer(val activity: HelloArActivity) :
             mapOf("NUMBER_OF_MIPMAP_LEVELS" to cubemapFilter.numberOfMipmapLevels.toString())
           )
           .setTexture("u_AlbedoTexture", virtualObjectAlbedoTexture)
-          .setTexture("u_RoughnessMetallicAmbientOcclusionTexture", virtualObjectPbrTexture)
+          //.setTexture("u_RoughnessMetallicAmbientOcclusionTexture", virtualObjectPbrTexture)
           .setTexture("u_Cubemap", cubemapFilter.filteredCubemapTexture)
           .setTexture("u_DfgTexture", dfgTexture)
     } catch (e: IOException) {
@@ -259,7 +259,7 @@ class HelloArRenderer(val activity: HelloArActivity) :
     virtualSceneFramebuffer.resize(width, height)
   }
 
-  private var floaty = 0.0F
+  private var floaty = -1.0F
   override fun onDrawFrame(render: SampleRender) {
     val session = session ?: return
 
@@ -307,20 +307,20 @@ class HelloArRenderer(val activity: HelloArActivity) :
     // BackgroundRenderer.updateDisplayGeometry must be called every frame to update the coordinates
     // used to draw the background camera image.
     backgroundRenderer.updateDisplayGeometry(frame)
-    val shouldGetDepthImage =
-      activity.depthSettings.useDepthForOcclusion() ||
-        activity.depthSettings.depthColorVisualizationEnabled()
-    if (camera.trackingState == TrackingState.TRACKING && shouldGetDepthImage) {
-      try {
-        val depthImage = frame.acquireDepthImage16Bits()
-        backgroundRenderer.updateCameraDepthTexture(depthImage)
-        depthImage.close()
-      } catch (e: NotYetAvailableException) {
-        // This normally means that depth data is not available yet. This is normal so we will not
-        // spam the logcat with this.
-      }
-    }
-    // Handle one tap per frame.
+//    val shouldGetDepthImage =
+//      activity.depthSettings.useDepthForOcclusion() ||
+//        activity.depthSettings.depthColorVisualizationEnabled()
+//    if (camera.trackingState == TrackingState.TRACKING && shouldGetDepthImage) {
+//      try {
+//        val depthImage = frame.acquireDepthImage16Bits()
+//        backgroundRenderer.updateCameraDepthTexture(depthImage)
+//        depthImage.close()
+//      } catch (e: NotYetAvailableException) {
+//        // This normally means that depth data is not available yet. This is normal so we will not
+//        // spam the logcat with this.
+//      }
+//    }
+//    // Handle one tap per frame.
     handleTap(frame, camera)
 
     // Keep the screen unlocked while tracking, but allow it to lock when tracking stops.
@@ -328,23 +328,23 @@ class HelloArRenderer(val activity: HelloArActivity) :
 
     // Show a message based on whether tracking has failed, if planes are detected, and if the user
     // has placed any objects.
-    val message: String? =
-      when {
-        camera.trackingState == TrackingState.PAUSED &&
-          camera.trackingFailureReason == TrackingFailureReason.NONE ->
-          activity.getString(R.string.searching_planes)
-        camera.trackingState == TrackingState.PAUSED ->
-          TrackingStateHelper.getTrackingFailureReasonString(camera)
-        session.hasTrackingPlane() && wrappedAnchors.isEmpty() ->
-          activity.getString(R.string.waiting_taps)
-        session.hasTrackingPlane() && wrappedAnchors.isNotEmpty() -> null
-        else -> activity.getString(R.string.searching_planes)
-      }
-    if (message == null) {
-      activity.view.snackbarHelper.hide(activity)
-    } else {
-      activity.view.snackbarHelper.showMessage(activity, message)
-    }
+//    val message: String? =
+//      when {
+//        camera.trackingState == TrackingState.PAUSED &&
+//          camera.trackingFailureReason == TrackingFailureReason.NONE ->
+//          activity.getString(R.string.searching_planes)
+//        camera.trackingState == TrackingState.PAUSED ->
+//          TrackingStateHelper.getTrackingFailureReasonString(camera)
+//        session.hasTrackingPlane() && wrappedAnchors.isEmpty() ->
+//          activity.getString(R.string.waiting_taps)
+//        session.hasTrackingPlane() && wrappedAnchors.isNotEmpty() -> null
+//        else -> activity.getString(R.string.searching_planes)
+//      }
+//    if (message == null) {
+//      activity.view.snackbarHelper.hide(activity)
+//    } else {
+//      activity.view.snackbarHelper.showMessage(activity, message)
+//    }
 
     // -- Draw background
     if (frame.timestamp != 0L) {
@@ -375,7 +375,7 @@ class HelloArRenderer(val activity: HelloArActivity) :
     render.clear(virtualSceneFramebuffer, 0f, 0f, 0f, 0f)
     Log.d("spaceAnchor", camera.pose.toString())
     phoneTelemetry = PhoneTelemetry.get()
-    Log.d("rotation", phoneTelemetry.getOrientationAngles()[0].toString())
+    Log.d("rotation", phoneTelemetry.getOrientationAngles().map {it.toInt()}.toString())
     if (this::spaceAnchor.isInitialized){
       spaceAnchor = session!!.createAnchor(Pose.makeTranslation(0F, 0F, floaty))
       floaty = floaty + 0.001F
@@ -384,8 +384,8 @@ class HelloArRenderer(val activity: HelloArActivity) :
       Matrix.multiplyMM(modelViewProjectionMatrix, 0, projectionMatrix, 0, modelViewMatrix, 0)
       virtualObjectShader.setMat4("u_ModelView", modelViewMatrix)
       virtualObjectShader.setMat4("u_ModelViewProjection", modelViewProjectionMatrix)
-      val texture = virtualObjectAlbedoTexture
-      virtualObjectShader.setTexture("u_AlbedoTexture", texture)
+//      val texture = virtualObjectAlbedoTexture
+//      virtualObjectShader.setTexture("u_AlbedoTexture", texture)
       render.draw(virtualObjectMesh, virtualObjectShader, virtualSceneFramebuffer)
     }
 

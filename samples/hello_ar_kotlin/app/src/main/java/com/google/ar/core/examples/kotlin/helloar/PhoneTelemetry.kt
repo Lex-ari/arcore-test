@@ -1,70 +1,38 @@
 package com.google.ar.core.examples.kotlin.helloar
 
-import android.app.Activity
 import android.content.Context
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
-import android.os.Bundle
-import android.util.Log
-import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.ContextCompat.getSystemService
-import java.lang.IllegalStateException
 
 
-class PhoneTelemetry private constructor(context: Context) : Activity(), SensorEventListener{
+class PhoneTelemetry private constructor(context: Context) : SensorEventListener{
     companion object {
         private var INSTANCE: PhoneTelemetry? = null
-        private lateinit var context: Context
         fun initialize(context: Context) {
             if (INSTANCE == null) {
                 INSTANCE = PhoneTelemetry(context)
             }
-            this.context = context
         }
         fun get(): PhoneTelemetry {
             return INSTANCE ?: throw IllegalStateException("SatelliteRepository must be initialized")
         }
-
-        fun getSensorManager() : SensorManager{
-            return context.applicationContext.getSystemService(Context. SENSOR_SERVICE) as SensorManager
-        }
     }
 
-
-    private lateinit var sensorManager : SensorManager
+    private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
     private val accelerometerReading = FloatArray(3)
     private val magnetometerReading = FloatArray(3)
 
     private val rotationMatrix = FloatArray(9)
     private val orientationAngles = FloatArray(3)
+    private var orientationAnglesDeg = DoubleArray(3)
 
-    fun getOrientationAngles(): FloatArray {
-        updateOrientationAngles()
-        return orientationAngles
+    init {
+        registerSensors()
     }
 
-    public override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        sensorManager = getSensorManager()
-    }
-
-    override fun onAccuracyChanged(sensor: Sensor, accuracy: Int) {
-        // Do something here if sensor accuracy changes.
-        // You must implement this callback in your code.
-    }
-
-    override fun onResume() {
-        super.onResume()
-
-        // Get updates from the accelerometer and magnetometer at a constant rate.
-        // To make batch operations more efficient and reduce power consumption,
-        // provide support for delaying updates to the application.
-        //
-        // In this example, the sensor reporting delay is small enough such that
-        // the application receives an update before the system checks the sensor
-        // readings again.
+    private fun registerSensors() {
         sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)?.also { accelerometer ->
             sensorManager.registerListener(
                 this,
@@ -83,9 +51,17 @@ class PhoneTelemetry private constructor(context: Context) : Activity(), SensorE
         }
     }
 
-    override fun onPause() {
-        super.onPause()
+    fun getOrientationAngles(): DoubleArray {
+        updateOrientationAngles()
+        return orientationAnglesDeg
+    }
 
+    override fun onAccuracyChanged(sensor: Sensor, accuracy: Int) {
+        // Do something here if sensor accuracy changes.
+        // You must implement this callback in your code.
+    }
+
+    fun unregisterSensors() {
         // Don't receive any more updates from either sensor.
         sensorManager.unregisterListener(this)
     }
@@ -103,7 +79,7 @@ class PhoneTelemetry private constructor(context: Context) : Activity(), SensorE
 
     // Compute the three orientation angles based on the most recent readings from
     // the device's accelerometer and magnetometer.
-    fun updateOrientationAngles() {
+    private fun updateOrientationAngles() {
         // Update rotation matrix, which is needed to update orientation angles.
         SensorManager.getRotationMatrix(
             rotationMatrix,
@@ -115,6 +91,11 @@ class PhoneTelemetry private constructor(context: Context) : Activity(), SensorE
         // "rotationMatrix" now has up-to-date information.
 
         SensorManager.getOrientation(rotationMatrix, orientationAngles)
+        val azimuth = Math.toDegrees(orientationAngles[0].toDouble())
+        val pitch = Math.toDegrees(orientationAngles[1].toDouble())
+        val roll = Math.toDegrees(orientationAngles[2].toDouble())
+        orientationAnglesDeg = doubleArrayOf(azimuth, pitch, roll)
+
 
         // "orientationAngles" now has up-to-date information.
     }
