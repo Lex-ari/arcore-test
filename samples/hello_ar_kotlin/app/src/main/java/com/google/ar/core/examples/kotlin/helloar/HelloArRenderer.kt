@@ -53,6 +53,7 @@ import com.google.ar.core.exceptions.CameraNotAvailableException
 import com.google.ar.core.exceptions.NotYetAvailableException
 import java.io.IOException
 import java.nio.ByteBuffer
+import kotlin.properties.Delegates
 
 /** Renders the HelloAR application using our example Renderer. */
 class HelloArRenderer(val activity: HelloArActivity) :
@@ -134,6 +135,8 @@ class HelloArRenderer(val activity: HelloArActivity) :
   val worldLightDirection = floatArrayOf(0.0f, 0.0f, 0.0f, 0.0f)
   val viewLightDirection = FloatArray(4) // view x world light direction
 
+  private var initialHeading: Float? = null
+
   val session
     get() = activity.arCoreSessionHelper.session
 
@@ -141,6 +144,7 @@ class HelloArRenderer(val activity: HelloArActivity) :
   val trackingStateHelper = TrackingStateHelper(activity)
 
   private lateinit var  phoneTelemetry : PhoneTelemetry
+  private val mathSatellite = MathSatellite.get()
 
   override fun onResume(owner: LifecycleOwner) {
     displayRotationHelper.onResume()
@@ -373,12 +377,18 @@ class HelloArRenderer(val activity: HelloArActivity) :
 
     // Visualize anchors created by touch.
     render.clear(virtualSceneFramebuffer, 0f, 0f, 0f, 0f)
-    Log.d("spaceAnchor", camera.pose.toString())
-    phoneTelemetry = PhoneTelemetry.get()
-    Log.d("rotation", phoneTelemetry.getOrientationAngles().map {it.toInt()}.toString())
+    if (initialHeading == null) {
+      phoneTelemetry = PhoneTelemetry.get()
+      initialHeading = phoneTelemetry.getOrientationAngles()[0].toFloat()
+      Log.d("initinit", "initial heading set at: ${initialHeading}")
+    }
+    var translationArray = mathSatellite.aziEleToEuler(0.0 - initialHeading!!, 90.0)
+    //var translationArray = floatArrayOf(0F, 0F, -1F)
+    var translation = adjustEulerToPose(translationArray)
+    Log.d("translationtranslation", translation.toString())
     if (this::spaceAnchor.isInitialized){
-      spaceAnchor = session!!.createAnchor(Pose.makeTranslation(0F, 0F, floaty))
-      floaty = floaty + 0.001F
+      spaceAnchor = session!!.createAnchor(translation)
+      floaty += 0.001F
       spaceAnchor.pose.toMatrix(modelMatrix, 0)
       Matrix.multiplyMM(modelViewMatrix, 0, viewMatrix, 0, modelMatrix, 0)
       Matrix.multiplyMM(modelViewProjectionMatrix, 0, projectionMatrix, 0, modelViewMatrix, 0)
@@ -417,6 +427,15 @@ class HelloArRenderer(val activity: HelloArActivity) :
 
     // Compose the virtual scene with the background.
     backgroundRenderer.drawVirtualScene(render, virtualSceneFramebuffer, Z_NEAR, Z_FAR)
+  }
+
+  private fun adjustEulerToPose(mapping : FloatArray) : Pose {
+
+    val adjNorth = mapping[0] * -1
+    val adjAltitude = mapping[2] * 1
+    val adjEast = mapping[1] * -1
+    val adjustedEuler = floatArrayOf(adjNorth, adjAltitude, adjEast)
+    return Pose.makeTranslation(adjustedEuler)
   }
 
   /** Checks if we detected at least one plane. */
@@ -482,7 +501,6 @@ class HelloArRenderer(val activity: HelloArActivity) :
       sphericalHarmonicsCoefficients
     )
   }
-
   // Handle only one tap per frame, as taps are usually low frequency compared to frame rate.
   private fun handleTap(frame: Frame, camera: Camera) {
     if (camera.trackingState != TrackingState.TRACKING) return
@@ -493,7 +511,7 @@ class HelloArRenderer(val activity: HelloArActivity) :
     Log.d("spaceAnchor", Pose.IDENTITY.toString())
 
 
-    val hitResultList = frame.hitTest(tap)
+    //val hitResultList = frame.hitTest(tap)
 //      if (activity.instantPlacementSettings.isInstantPlacementEnabled) {
 //        frame.hitTestInstantPlacement(tap.x, tap.y, APPROXIMATE_DISTANCE_METERS)
 //      } else {
@@ -502,7 +520,7 @@ class HelloArRenderer(val activity: HelloArActivity) :
 
     // Hits are sorted by depth. Consider only closest hit on a plane, Oriented Point, Depth Point,
     // or Instant Placement Point.
-    val firstHitResult = hitResultList.firstOrNull()
+    //val firstHitResult = hitResultList.firstOrNull()
 //      hitResultList.firstOrNull { hit ->
 //        when (val trackable = hit.trackable!!) {
 ////          is Plane ->
@@ -516,44 +534,43 @@ class HelloArRenderer(val activity: HelloArActivity) :
 //        }
 //      }
 
-    if (firstHitResult != null) {
-      // Cap the number of objects created. This avoids overloading both the
-      // rendering system and ARCore.
-      if (wrappedAnchors.size >= 20) {
-        wrappedAnchors[0].anchor.detach()
-        wrappedAnchors.removeAt(0)
-      }
-
-      // Adding an Anchor tells ARCore that it should track this position in
-      // space. This anchor is created on the Plane to place the 3D model
-      // in the correct position relative both to the world and to the plane.
-      //wrappedAnchors.add(WrappedAnchor(firstHitResult.createAnchor(), firstHitResult.trackable))
-
-      //https://github.com/google-ar/arcore-android-sdk/issues/110
-//      wrappedAnchors.add(WrappedAnchor(
-//        session!!.createAnchor(
-//        frame.camera.pose
-//          .compose(Pose.makeTranslation(0F, 0F, -1f)
-//            .extractTranslation())
-//      ), firstHitResult.trackable))
-
-      //From start
-      //wrappedAnchors.add(WrappedAnchor(session!!.createAnchor(Pose.makeTranslation(0F, 0F, 0F)), firstHitResult.trackable))
-
-
-      val translation = floatArrayOf(0f, 0f, -1f)
-      val rotationQuaternion = floatArrayOf(0f, 0f, 0f, 1f)
-      val pose = Pose(translation, rotationQuaternion)
-      val finalPose = session!!.update().camera.pose.compose(pose)
-      val anchor = session!!.createAnchor(finalPose)
-      wrappedAnchors.add(WrappedAnchor(anchor, firstHitResult.trackable))
-
-
-
-      // For devices that support the Depth API, shows a dialog to suggest enabling
-      // depth-based occlusion. This dialog needs to be spawned on the UI thread.
-      activity.runOnUiThread { activity.view.showOcclusionDialogIfNeeded() }
-    }
+//    if (firstHitResult != null) {
+//      // Cap the number of objects created. This avoids overloading both the
+//      // rendering system and ARCore.
+////      if (wrappedAnchors.size >= 20) {
+////        wrappedAnchors[0].anchor.detach()
+////        wrappedAnchors.removeAt(0)
+////      }
+//
+//      // Adding an Anchor tells ARCore that it should track this position in
+//      // space. This anchor is created on the Plane to place the 3D model
+//      // in the correct position relative both to the world and to the plane.
+//      //wrappedAnchors.add(WrappedAnchor(firstHitResult.createAnchor(), firstHitResult.trackable))
+//
+//      //https://github.com/google-ar/arcore-android-sdk/issues/110
+////      wrappedAnchors.add(WrappedAnchor(
+////        session!!.createAnchor(
+////        frame.camera.pose
+////          .compose(Pose.makeTranslation(0F, 0F, -1f)
+////            .extractTranslation())
+////      ), firstHitResult.trackable))
+//
+//      //From start
+//      //wrappedAnchors.add(WrappedAnchor(session!!.createAnchor(Pose.makeTranslation(0F, 0F, 0F)), firstHitResult.trackable))
+//
+//
+////      val translation = floatArrayOf(0f, 0f, -1f)
+////      val rotationQuaternion = floatArrayOf(0f, 0f, 0f, 1f)
+////      val pose = Pose(translation, rotationQuaternion)
+////      val finalPose = session!!.update().camera.pose.compose(pose)
+////      val anchor = session!!.createAnchor(finalPose)
+////      wrappedAnchors.add(WrappedAnchor(anchor, firstHitResult.trackable))
+//
+//
+//      // For devices that support the Depth API, shows a dialog to suggest enabling
+//      // depth-based occlusion. This dialog needs to be spawned on the UI thread.
+//      activity.runOnUiThread { activity.view.showOcclusionDialogIfNeeded() }
+//    }
   }
 
   private fun showError(errorMessage: String) =

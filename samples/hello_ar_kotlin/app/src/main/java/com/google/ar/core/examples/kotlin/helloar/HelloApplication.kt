@@ -7,5 +7,6 @@ class HelloApplication : Application() {
     override fun onCreate(){
         super.onCreate()
         PhoneTelemetry.initialize(this)
+        MathSatellite.initialize()
     }
 }
