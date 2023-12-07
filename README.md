@@ -1,4 +1,8 @@
-ARCore SDK for Android
+ARCore test for STAR-Vis
+======================
+ARCore testbench for AR visualization in STAR-Vis
+
+
 ======================
 Copyright 2017 Google LLC
 
