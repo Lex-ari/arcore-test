@@ -311,44 +311,12 @@ class HelloArRenderer(val activity: HelloArActivity) :
     // BackgroundRenderer.updateDisplayGeometry must be called every frame to update the coordinates
     // used to draw the background camera image.
     backgroundRenderer.updateDisplayGeometry(frame)
-//    val shouldGetDepthImage =
-//      activity.depthSettings.useDepthForOcclusion() ||
-//        activity.depthSettings.depthColorVisualizationEnabled()
-//    if (camera.trackingState == TrackingState.TRACKING && shouldGetDepthImage) {
-//      try {
-//        val depthImage = frame.acquireDepthImage16Bits()
-//        backgroundRenderer.updateCameraDepthTexture(depthImage)
-//        depthImage.close()
-//      } catch (e: NotYetAvailableException) {
-//        // This normally means that depth data is not available yet. This is normal so we will not
-//        // spam the logcat with this.
-//      }
-//    }
+
 //    // Handle one tap per frame.
-    handleTap(frame, camera)
+    //handleTap(frame, camera)
 
     // Keep the screen unlocked while tracking, but allow it to lock when tracking stops.
     trackingStateHelper.updateKeepScreenOnFlag(camera.trackingState)
-
-    // Show a message based on whether tracking has failed, if planes are detected, and if the user
-    // has placed any objects.
-//    val message: String? =
-//      when {
-//        camera.trackingState == TrackingState.PAUSED &&
-//          camera.trackingFailureReason == TrackingFailureReason.NONE ->
-//          activity.getString(R.string.searching_planes)
-//        camera.trackingState == TrackingState.PAUSED ->
-//          TrackingStateHelper.getTrackingFailureReasonString(camera)
-//        session.hasTrackingPlane() && wrappedAnchors.isEmpty() ->
-//          activity.getString(R.string.waiting_taps)
-//        session.hasTrackingPlane() && wrappedAnchors.isNotEmpty() -> null
-//        else -> activity.getString(R.string.searching_planes)
-//      }
-//    if (message == null) {
-//      activity.view.snackbarHelper.hide(activity)
-//    } else {
-//      activity.view.snackbarHelper.showMessage(activity, message)
-//    }
 
     // -- Draw background
     if (frame.timestamp != 0L) {
@@ -377,18 +345,20 @@ class HelloArRenderer(val activity: HelloArActivity) :
 
     // Visualize anchors created by touch.
     render.clear(virtualSceneFramebuffer, 0f, 0f, 0f, 0f)
+    if (!this::spaceAnchor.isInitialized) {
+      spaceAnchor = session!!.createAnchor(Pose.IDENTITY)
+    }
     if (initialHeading == null) {
       phoneTelemetry = PhoneTelemetry.get()
       initialHeading = phoneTelemetry.getOrientationAngles()[0].toFloat()
       Log.d("initinit", "initial heading set at: ${initialHeading}")
     }
-    var translationArray = mathSatellite.aziEleToEuler(0.0 - initialHeading!!, 90.0)
-    //var translationArray = floatArrayOf(0F, 0F, -1F)
+    var translationArray = mathSatellite.aziEleToEuler(90.0 - initialHeading!!, floaty.toDouble())
     var translation = adjustEulerToPose(translationArray)
     Log.d("translationtranslation", translation.toString())
     if (this::spaceAnchor.isInitialized){
       spaceAnchor = session!!.createAnchor(translation)
-      floaty += 0.001F
+      floaty += 0.01F
       spaceAnchor.pose.toMatrix(modelMatrix, 0)
       Matrix.multiplyMM(modelViewMatrix, 0, viewMatrix, 0, modelMatrix, 0)
       Matrix.multiplyMM(modelViewProjectionMatrix, 0, projectionMatrix, 0, modelViewMatrix, 0)
@@ -398,32 +368,6 @@ class HelloArRenderer(val activity: HelloArActivity) :
 //      virtualObjectShader.setTexture("u_AlbedoTexture", texture)
       render.draw(virtualObjectMesh, virtualObjectShader, virtualSceneFramebuffer)
     }
-
-
-//    for ((anchor, trackable) in
-//      wrappedAnchors.filter { it.anchor.trackingState == TrackingState.TRACKING }) {
-//      // Get the current pose of an Anchor in world space. The Anchor pose is updated
-//      // during calls to session.update() as ARCore refines its estimate of the world.
-//      anchor.pose.toMatrix(modelMatrix, 0)
-//
-//      // Calculate model/view/projection matrices
-//      Matrix.multiplyMM(modelViewMatrix, 0, viewMatrix, 0, modelMatrix, 0)
-//      Matrix.multiplyMM(modelViewProjectionMatrix, 0, projectionMatrix, 0, modelViewMatrix, 0)
-//
-//      // Update shader properties and draw
-//      virtualObjectShader.setMat4("u_ModelView", modelViewMatrix)
-//      virtualObjectShader.setMat4("u_ModelViewProjection", modelViewProjectionMatrix)
-//      val texture =
-//        if ((trackable as? InstantPlacementPoint)?.trackingMethod ==
-//            InstantPlacementPoint.TrackingMethod.SCREENSPACE_WITH_APPROXIMATE_DISTANCE
-//        ) {
-//          virtualObjectAlbedoInstantPlacementTexture
-//        } else {
-//          virtualObjectAlbedoTexture
-//        }
-//      virtualObjectShader.setTexture("u_AlbedoTexture", texture)
-//      render.draw(virtualObjectMesh, virtualObjectShader, virtualSceneFramebuffer)
-//    }
 
     // Compose the virtual scene with the background.
     backgroundRenderer.drawVirtualScene(render, virtualSceneFramebuffer, Z_NEAR, Z_FAR)
@@ -500,77 +444,6 @@ class HelloArRenderer(val activity: HelloArActivity) :
       "u_SphericalHarmonicsCoefficients",
       sphericalHarmonicsCoefficients
     )
-  }
-  // Handle only one tap per frame, as taps are usually low frequency compared to frame rate.
-  private fun handleTap(frame: Frame, camera: Camera) {
-    if (camera.trackingState != TrackingState.TRACKING) return
-    val tap = activity.view.tapHelper.poll() ?: return
-    if (!this::spaceAnchor.isInitialized) {
-      spaceAnchor = session!!.createAnchor(Pose.IDENTITY)
-    }
-    Log.d("spaceAnchor", Pose.IDENTITY.toString())
-
-
-    //val hitResultList = frame.hitTest(tap)
-//      if (activity.instantPlacementSettings.isInstantPlacementEnabled) {
-//        frame.hitTestInstantPlacement(tap.x, tap.y, APPROXIMATE_DISTANCE_METERS)
-//      } else {
-//        frame.hitTest(tap)
-//      }
-
-    // Hits are sorted by depth. Consider only closest hit on a plane, Oriented Point, Depth Point,
-    // or Instant Placement Point.
-    //val firstHitResult = hitResultList.firstOrNull()
-//      hitResultList.firstOrNull { hit ->
-//        when (val trackable = hit.trackable!!) {
-////          is Plane ->
-////            trackable.isPoseInPolygon(hit.hitPose) &&
-////              PlaneRenderer.calculateDistanceToPlane(hit.hitPose, camera.pose) > 0
-////          is Point -> trackable.orientationMode == Point.OrientationMode.ESTIMATED_SURFACE_NORMAL
-////          is InstantPlacementPoint -> true
-//          // DepthPoints are only returned if Config.DepthMode is set to AUTOMATIC.
-//          // is DepthPoint -> true
-//          else -> false
-//        }
-//      }
-
-//    if (firstHitResult != null) {
-//      // Cap the number of objects created. This avoids overloading both the
-//      // rendering system and ARCore.
-////      if (wrappedAnchors.size >= 20) {
-////        wrappedAnchors[0].anchor.detach()
-////        wrappedAnchors.removeAt(0)
-////      }
-//
-//      // Adding an Anchor tells ARCore that it should track this position in
-//      // space. This anchor is created on the Plane to place the 3D model
-//      // in the correct position relative both to the world and to the plane.
-//      //wrappedAnchors.add(WrappedAnchor(firstHitResult.createAnchor(), firstHitResult.trackable))
-//
-//      //https://github.com/google-ar/arcore-android-sdk/issues/110
-////      wrappedAnchors.add(WrappedAnchor(
-////        session!!.createAnchor(
-////        frame.camera.pose
-////          .compose(Pose.makeTranslation(0F, 0F, -1f)
-////            .extractTranslation())
-////      ), firstHitResult.trackable))
-//
-//      //From start
-//      //wrappedAnchors.add(WrappedAnchor(session!!.createAnchor(Pose.makeTranslation(0F, 0F, 0F)), firstHitResult.trackable))
-//
-//
-////      val translation = floatArrayOf(0f, 0f, -1f)
-////      val rotationQuaternion = floatArrayOf(0f, 0f, 0f, 1f)
-////      val pose = Pose(translation, rotationQuaternion)
-////      val finalPose = session!!.update().camera.pose.compose(pose)
-////      val anchor = session!!.createAnchor(finalPose)
-////      wrappedAnchors.add(WrappedAnchor(anchor, firstHitResult.trackable))
-//
-//
-//      // For devices that support the Depth API, shows a dialog to suggest enabling
-//      // depth-based occlusion. This dialog needs to be spawned on the UI thread.
-//      activity.runOnUiThread { activity.view.showOcclusionDialogIfNeeded() }
-//    }
   }
 
   private fun showError(errorMessage: String) =
