@@ -33,7 +33,6 @@ import com.google.ar.core.exceptions.UnavailableApkTooOldException
 import com.google.ar.core.exceptions.UnavailableDeviceNotCompatibleException
 import com.google.ar.core.exceptions.UnavailableSdkTooOldException
 import com.google.ar.core.exceptions.UnavailableUserDeclinedInstallationException
-
 /**
  * This is a simple example that shows how to create an augmented reality (AR) application using the
  * ARCore API. The application will display any detected planes and will allow the user to tap on a

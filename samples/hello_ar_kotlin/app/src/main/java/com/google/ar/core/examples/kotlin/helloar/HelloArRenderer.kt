@@ -15,8 +15,12 @@
  */
 package com.google.ar.core.examples.kotlin.helloar
 
+import android.hardware.Sensor
+import android.hardware.SensorManager
 import android.opengl.GLES30
 import android.opengl.Matrix
+import android.provider.ContactsContract.CommonDataKinds.Phone
+import android.service.autofill.Validators.or
 import android.util.Log
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
@@ -28,6 +32,7 @@ import com.google.ar.core.InstantPlacementPoint
 import com.google.ar.core.LightEstimate
 import com.google.ar.core.Plane
 import com.google.ar.core.Point
+import com.google.ar.core.Pose
 import com.google.ar.core.Session
 import com.google.ar.core.Trackable
 import com.google.ar.core.TrackingFailureReason
@@ -110,6 +115,7 @@ class HelloArRenderer(val activity: HelloArActivity) :
   lateinit var virtualObjectAlbedoInstantPlacementTexture: Texture
 
   private val wrappedAnchors = mutableListOf<WrappedAnchor>()
+  private lateinit var spaceAnchor : Anchor
 
   // Environmental HDR
   lateinit var dfgTexture: Texture
@@ -133,6 +139,8 @@ class HelloArRenderer(val activity: HelloArActivity) :
 
   val displayRotationHelper = DisplayRotationHelper(activity)
   val trackingStateHelper = TrackingStateHelper(activity)
+
+  private lateinit var  phoneTelemetry : PhoneTelemetry
 
   override fun onResume(owner: LifecycleOwner) {
     displayRotationHelper.onResume()
@@ -186,23 +194,23 @@ class HelloArRenderer(val activity: HelloArActivity) :
       )
       GLError.maybeThrowGLException("Failed to populate DFG texture", "glTexImage2D")
 
-      // Point cloud
-      pointCloudShader =
-        Shader.createFromAssets(
-            render,
-            "shaders/point_cloud.vert",
-            "shaders/point_cloud.frag",
-            /*defines=*/ null
-          )
-          .setVec4("u_Color", floatArrayOf(31.0f / 255.0f, 188.0f / 255.0f, 210.0f / 255.0f, 1.0f))
-          .setFloat("u_PointSize", 5.0f)
-
-      // four entries per vertex: X, Y, Z, confidence
-      pointCloudVertexBuffer =
-        VertexBuffer(render, /*numberOfEntriesPerVertex=*/ 4, /*entries=*/ null)
-      val pointCloudVertexBuffers = arrayOf(pointCloudVertexBuffer)
-      pointCloudMesh =
-        Mesh(render, Mesh.PrimitiveMode.POINTS, /*indexBuffer=*/ null, pointCloudVertexBuffers)
+//      // Point cloud
+//      pointCloudShader =
+//        Shader.createFromAssets(
+//            render,
+//            "shaders/point_cloud.vert",
+//            "shaders/point_cloud.frag",
+//            /*defines=*/ null
+//          )
+//          .setVec4("u_Color", floatArrayOf(31.0f / 255.0f, 188.0f / 255.0f, 210.0f / 255.0f, 1.0f))
+//          .setFloat("u_PointSize", 5.0f)
+//
+//      // four entries per vertex: X, Y, Z, confidence
+//      pointCloudVertexBuffer =
+//        VertexBuffer(render, /*numberOfEntriesPerVertex=*/ 4, /*entries=*/ null)
+//      val pointCloudVertexBuffers = arrayOf(pointCloudVertexBuffer)
+//      pointCloudMesh =
+//        Mesh(render, Mesh.PrimitiveMode.POINTS, /*indexBuffer=*/ null, pointCloudVertexBuffers)
 
       // Virtual object to render (ARCore pawn)
       virtualObjectAlbedoTexture =
@@ -251,6 +259,7 @@ class HelloArRenderer(val activity: HelloArActivity) :
     virtualSceneFramebuffer.resize(width, height)
   }
 
+  private var floaty = 0.0F
   override fun onDrawFrame(render: SampleRender) {
     val session = session ?: return
 
@@ -311,7 +320,6 @@ class HelloArRenderer(val activity: HelloArActivity) :
         // spam the logcat with this.
       }
     }
-
     // Handle one tap per frame.
     handleTap(frame, camera)
 
@@ -357,55 +365,55 @@ class HelloArRenderer(val activity: HelloArActivity) :
 
     // Get camera matrix and draw.
     camera.getViewMatrix(viewMatrix, 0)
-    frame.acquirePointCloud().use { pointCloud ->
-      if (pointCloud.timestamp > lastPointCloudTimestamp) {
-        pointCloudVertexBuffer.set(pointCloud.points)
-        lastPointCloudTimestamp = pointCloud.timestamp
-      }
-      Matrix.multiplyMM(modelViewProjectionMatrix, 0, projectionMatrix, 0, viewMatrix, 0)
-      pointCloudShader.setMat4("u_ModelViewProjection", modelViewProjectionMatrix)
-      render.draw(pointCloudMesh, pointCloudShader)
-    }
-
-    // Visualize planes.
-    planeRenderer.drawPlanes(
-      render,
-      session.getAllTrackables<Plane>(Plane::class.java),
-      camera.displayOrientedPose,
-      projectionMatrix
-    )
 
     // -- Draw occluded virtual objects
 
     // Update lighting parameters in the shader
-    updateLightEstimation(frame.lightEstimate, viewMatrix)
+    //updateLightEstimation(frame.lightEstimate, viewMatrix)
 
     // Visualize anchors created by touch.
     render.clear(virtualSceneFramebuffer, 0f, 0f, 0f, 0f)
-    for ((anchor, trackable) in
-      wrappedAnchors.filter { it.anchor.trackingState == TrackingState.TRACKING }) {
-      // Get the current pose of an Anchor in world space. The Anchor pose is updated
-      // during calls to session.update() as ARCore refines its estimate of the world.
-      anchor.pose.toMatrix(modelMatrix, 0)
-
-      // Calculate model/view/projection matrices
+    Log.d("spaceAnchor", camera.pose.toString())
+    phoneTelemetry = PhoneTelemetry.get()
+    Log.d("rotation", phoneTelemetry.getOrientationAngles()[0].toString())
+    if (this::spaceAnchor.isInitialized){
+      spaceAnchor = session!!.createAnchor(Pose.makeTranslation(0F, 0F, floaty))
+      floaty = floaty + 0.001F
+      spaceAnchor.pose.toMatrix(modelMatrix, 0)
       Matrix.multiplyMM(modelViewMatrix, 0, viewMatrix, 0, modelMatrix, 0)
       Matrix.multiplyMM(modelViewProjectionMatrix, 0, projectionMatrix, 0, modelViewMatrix, 0)
-
-      // Update shader properties and draw
       virtualObjectShader.setMat4("u_ModelView", modelViewMatrix)
       virtualObjectShader.setMat4("u_ModelViewProjection", modelViewProjectionMatrix)
-      val texture =
-        if ((trackable as? InstantPlacementPoint)?.trackingMethod ==
-            InstantPlacementPoint.TrackingMethod.SCREENSPACE_WITH_APPROXIMATE_DISTANCE
-        ) {
-          virtualObjectAlbedoInstantPlacementTexture
-        } else {
-          virtualObjectAlbedoTexture
-        }
+      val texture = virtualObjectAlbedoTexture
       virtualObjectShader.setTexture("u_AlbedoTexture", texture)
       render.draw(virtualObjectMesh, virtualObjectShader, virtualSceneFramebuffer)
     }
+
+
+//    for ((anchor, trackable) in
+//      wrappedAnchors.filter { it.anchor.trackingState == TrackingState.TRACKING }) {
+//      // Get the current pose of an Anchor in world space. The Anchor pose is updated
+//      // during calls to session.update() as ARCore refines its estimate of the world.
+//      anchor.pose.toMatrix(modelMatrix, 0)
+//
+//      // Calculate model/view/projection matrices
+//      Matrix.multiplyMM(modelViewMatrix, 0, viewMatrix, 0, modelMatrix, 0)
+//      Matrix.multiplyMM(modelViewProjectionMatrix, 0, projectionMatrix, 0, modelViewMatrix, 0)
+//
+//      // Update shader properties and draw
+//      virtualObjectShader.setMat4("u_ModelView", modelViewMatrix)
+//      virtualObjectShader.setMat4("u_ModelViewProjection", modelViewProjectionMatrix)
+//      val texture =
+//        if ((trackable as? InstantPlacementPoint)?.trackingMethod ==
+//            InstantPlacementPoint.TrackingMethod.SCREENSPACE_WITH_APPROXIMATE_DISTANCE
+//        ) {
+//          virtualObjectAlbedoInstantPlacementTexture
+//        } else {
+//          virtualObjectAlbedoTexture
+//        }
+//      virtualObjectShader.setTexture("u_AlbedoTexture", texture)
+//      render.draw(virtualObjectMesh, virtualObjectShader, virtualSceneFramebuffer)
+//    }
 
     // Compose the virtual scene with the background.
     backgroundRenderer.drawVirtualScene(render, virtualSceneFramebuffer, Z_NEAR, Z_FAR)
@@ -416,22 +424,22 @@ class HelloArRenderer(val activity: HelloArActivity) :
     getAllTrackables(Plane::class.java).any { it.trackingState == TrackingState.TRACKING }
 
   /** Update state based on the current frame's light estimation. */
-  private fun updateLightEstimation(lightEstimate: LightEstimate, viewMatrix: FloatArray) {
-    if (lightEstimate.state != LightEstimate.State.VALID) {
-      virtualObjectShader.setBool("u_LightEstimateIsValid", false)
-      return
-    }
-    virtualObjectShader.setBool("u_LightEstimateIsValid", true)
-    Matrix.invertM(viewInverseMatrix, 0, viewMatrix, 0)
-    virtualObjectShader.setMat4("u_ViewInverse", viewInverseMatrix)
-    updateMainLight(
-      lightEstimate.environmentalHdrMainLightDirection,
-      lightEstimate.environmentalHdrMainLightIntensity,
-      viewMatrix
-    )
-    updateSphericalHarmonicsCoefficients(lightEstimate.environmentalHdrAmbientSphericalHarmonics)
-    cubemapFilter.update(lightEstimate.acquireEnvironmentalHdrCubeMap())
-  }
+//  private fun updateLightEstimation(lightEstimate: LightEstimate, viewMatrix: FloatArray) {
+//    if (lightEstimate.state != LightEstimate.State.VALID) {
+//      virtualObjectShader.setBool("u_LightEstimateIsValid", false)
+//      return
+//    }
+//    virtualObjectShader.setBool("u_LightEstimateIsValid", true)
+//    Matrix.invertM(viewInverseMatrix, 0, viewMatrix, 0)
+//    virtualObjectShader.setMat4("u_ViewInverse", viewInverseMatrix)
+//    updateMainLight(
+//      lightEstimate.environmentalHdrMainLightDirection,
+//      lightEstimate.environmentalHdrMainLightIntensity,
+//      viewMatrix
+//    )
+//    updateSphericalHarmonicsCoefficients(lightEstimate.environmentalHdrAmbientSphericalHarmonics)
+//    cubemapFilter.update(lightEstimate.acquireEnvironmentalHdrCubeMap())
+//  }
 
   private fun updateMainLight(
     direction: FloatArray,
@@ -479,29 +487,34 @@ class HelloArRenderer(val activity: HelloArActivity) :
   private fun handleTap(frame: Frame, camera: Camera) {
     if (camera.trackingState != TrackingState.TRACKING) return
     val tap = activity.view.tapHelper.poll() ?: return
+    if (!this::spaceAnchor.isInitialized) {
+      spaceAnchor = session!!.createAnchor(Pose.IDENTITY)
+    }
+    Log.d("spaceAnchor", Pose.IDENTITY.toString())
 
-    val hitResultList =
-      if (activity.instantPlacementSettings.isInstantPlacementEnabled) {
-        frame.hitTestInstantPlacement(tap.x, tap.y, APPROXIMATE_DISTANCE_METERS)
-      } else {
-        frame.hitTest(tap)
-      }
+
+    val hitResultList = frame.hitTest(tap)
+//      if (activity.instantPlacementSettings.isInstantPlacementEnabled) {
+//        frame.hitTestInstantPlacement(tap.x, tap.y, APPROXIMATE_DISTANCE_METERS)
+//      } else {
+//        frame.hitTest(tap)
+//      }
 
     // Hits are sorted by depth. Consider only closest hit on a plane, Oriented Point, Depth Point,
     // or Instant Placement Point.
-    val firstHitResult =
-      hitResultList.firstOrNull { hit ->
-        when (val trackable = hit.trackable!!) {
-          is Plane ->
-            trackable.isPoseInPolygon(hit.hitPose) &&
-              PlaneRenderer.calculateDistanceToPlane(hit.hitPose, camera.pose) > 0
-          is Point -> trackable.orientationMode == Point.OrientationMode.ESTIMATED_SURFACE_NORMAL
-          is InstantPlacementPoint -> true
-          // DepthPoints are only returned if Config.DepthMode is set to AUTOMATIC.
-          is DepthPoint -> true
-          else -> false
-        }
-      }
+    val firstHitResult = hitResultList.firstOrNull()
+//      hitResultList.firstOrNull { hit ->
+//        when (val trackable = hit.trackable!!) {
+////          is Plane ->
+////            trackable.isPoseInPolygon(hit.hitPose) &&
+////              PlaneRenderer.calculateDistanceToPlane(hit.hitPose, camera.pose) > 0
+////          is Point -> trackable.orientationMode == Point.OrientationMode.ESTIMATED_SURFACE_NORMAL
+////          is InstantPlacementPoint -> true
+//          // DepthPoints are only returned if Config.DepthMode is set to AUTOMATIC.
+//          // is DepthPoint -> true
+//          else -> false
+//        }
+//      }
 
     if (firstHitResult != null) {
       // Cap the number of objects created. This avoids overloading both the
@@ -514,7 +527,28 @@ class HelloArRenderer(val activity: HelloArActivity) :
       // Adding an Anchor tells ARCore that it should track this position in
       // space. This anchor is created on the Plane to place the 3D model
       // in the correct position relative both to the world and to the plane.
-      wrappedAnchors.add(WrappedAnchor(firstHitResult.createAnchor(), firstHitResult.trackable))
+      //wrappedAnchors.add(WrappedAnchor(firstHitResult.createAnchor(), firstHitResult.trackable))
+
+      //https://github.com/google-ar/arcore-android-sdk/issues/110
+//      wrappedAnchors.add(WrappedAnchor(
+//        session!!.createAnchor(
+//        frame.camera.pose
+//          .compose(Pose.makeTranslation(0F, 0F, -1f)
+//            .extractTranslation())
+//      ), firstHitResult.trackable))
+
+      //From start
+      //wrappedAnchors.add(WrappedAnchor(session!!.createAnchor(Pose.makeTranslation(0F, 0F, 0F)), firstHitResult.trackable))
+
+
+      val translation = floatArrayOf(0f, 0f, -1f)
+      val rotationQuaternion = floatArrayOf(0f, 0f, 0f, 1f)
+      val pose = Pose(translation, rotationQuaternion)
+      val finalPose = session!!.update().camera.pose.compose(pose)
+      val anchor = session!!.createAnchor(finalPose)
+      wrappedAnchors.add(WrappedAnchor(anchor, firstHitResult.trackable))
+
+
 
       // For devices that support the Depth API, shows a dialog to suggest enabling
       // depth-based occlusion. This dialog needs to be spawned on the UI thread.
