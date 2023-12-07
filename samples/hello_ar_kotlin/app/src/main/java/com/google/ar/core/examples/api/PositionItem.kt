@@ -6,7 +6,7 @@
 
  */
 
-package com.broncospace.android.starvis.api
+package com.google.ar.core.examples.api
 
 import android.net.Uri
 import com.squareup.moshi.Json

@@ -15,32 +15,20 @@
  */
 package com.google.ar.core.examples.kotlin.helloar
 
-import android.hardware.Sensor
-import android.hardware.SensorManager
-import android.opengl.GLES30
 import android.opengl.Matrix
-import android.provider.ContactsContract.CommonDataKinds.Phone
-import android.service.autofill.Validators.or
 import android.util.Log
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
+import com.google.ar.core.examples.SatelliteRepository
 import com.google.ar.core.Anchor
-import com.google.ar.core.Camera
-import com.google.ar.core.DepthPoint
-import com.google.ar.core.Frame
-import com.google.ar.core.InstantPlacementPoint
-import com.google.ar.core.LightEstimate
 import com.google.ar.core.Plane
-import com.google.ar.core.Point
 import com.google.ar.core.Pose
 import com.google.ar.core.Session
 import com.google.ar.core.Trackable
-import com.google.ar.core.TrackingFailureReason
 import com.google.ar.core.TrackingState
 import com.google.ar.core.examples.java.common.helpers.DisplayRotationHelper
 import com.google.ar.core.examples.java.common.helpers.TrackingStateHelper
 import com.google.ar.core.examples.java.common.samplerender.Framebuffer
-import com.google.ar.core.examples.java.common.samplerender.GLError
 import com.google.ar.core.examples.java.common.samplerender.Mesh
 import com.google.ar.core.examples.java.common.samplerender.SampleRender
 import com.google.ar.core.examples.java.common.samplerender.Shader
@@ -50,10 +38,7 @@ import com.google.ar.core.examples.java.common.samplerender.arcore.BackgroundRen
 import com.google.ar.core.examples.java.common.samplerender.arcore.PlaneRenderer
 import com.google.ar.core.examples.java.common.samplerender.arcore.SpecularCubemapFilter
 import com.google.ar.core.exceptions.CameraNotAvailableException
-import com.google.ar.core.exceptions.NotYetAvailableException
 import java.io.IOException
-import java.nio.ByteBuffer
-import kotlin.properties.Delegates
 
 /** Renders the HelloAR application using our example Renderer. */
 class HelloArRenderer(val activity: HelloArActivity) :
@@ -78,6 +63,7 @@ class HelloArRenderer(val activity: HelloArActivity) :
 
     private val Z_NEAR = 0.1f
     private val Z_FAR = 100f
+    private val satelliteRepository = SatelliteRepository.get()
 
     // Assumed distance from the device camera to the surface on which user will try to place
     // objects.
@@ -353,7 +339,12 @@ class HelloArRenderer(val activity: HelloArActivity) :
       initialHeading = phoneTelemetry.getOrientationAngles()[0].toFloat()
       Log.d("initinit", "initial heading set at: ${initialHeading}")
     }
-    var translationArray = mathSatellite.aziEleToEuler(90.0 - initialHeading!!, floaty.toDouble())
+
+    val positionItem = satelliteRepository.getLatestData()
+    val azimuth = positionItem.azimuth.toDouble()
+    val elevation = positionItem.elevation.toDouble()
+
+    var translationArray = mathSatellite.aziEleToEuler(azimuth - initialHeading!!, elevation)
     var translation = adjustEulerToPose(translationArray)
     Log.d("translationtranslation", translation.toString())
     if (this::spaceAnchor.isInitialized){

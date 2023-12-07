@@ -6,10 +6,9 @@
 
  */
 
-package com.broncospace.android.starvis.api
+package com.google.ar.core.examples.api
 
 import retrofit2.http.GET
-import retrofit2.http.Query
 
 private const val API_KEY = "89PAUZ-9G5ZB6-49ZGHR-55XX"
 private const val noradId = 25544

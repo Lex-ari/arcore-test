@@ -140,4 +140,6 @@ class HelloArActivity : AppCompatActivity() {
     super.onWindowFocusChanged(hasFocus)
     FullScreenHelper.setFullScreenOnWindowFocusChanged(this, hasFocus)
   }
+
+
 }

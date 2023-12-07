@@ -6,7 +6,7 @@
 
  */
 
-package com.broncospace.android.starvis.api
+package com.google.ar.core.examples.api
 import com.squareup.moshi.JsonClass
 
 @JsonClass(generateAdapter = true)
